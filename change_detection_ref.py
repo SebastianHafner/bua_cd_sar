@@ -6,6 +6,7 @@ from scipy import ndimage
 import time
 from joblib import Parallel, delayed
 
+from osgeo import gdal
 import ruptures as rpt
 import calendar
 from skimage import morphology
@@ -13,13 +14,14 @@ from sklearn.cluster import k_means
 from skimage import measure
 import seaborn as sns
 
-from utils import paths, geofiles
+from utils import paths
 from pathlib import Path
 
 """
 [1] Change variables 
 -----------------------------------------------------------------------------------------------------------------------------------------------------
 """
+
 
 def BreakPoint(y, x):
     # Preprocess the data to get rid of possible nan values and convert it into intensities
@@ -52,10 +54,12 @@ def BreakPoint(y, x):
 dirs = paths.load_paths()
 file = Path(dirs.DATA) / 'test.tif'
 
-images, transform, crs, band_descriptions = geofiles.read_tif(file)
-images = images.transpose((2, 0, 1))
+# images, transform, crs = geofiles.read_tif(file)
+
+data = gdal.Open(str(file), gdal.GA_ReadOnly)
+images = data.ReadAsArray()
 imagesT = np.reshape(images, (images.shape[0], images.shape[1] * images.shape[2])).transpose()
-# dates   = np.array((dates - ref).days) / 365.25
+# Dates   = np.array((Dates - Ref).days) / 365.25
 
 fig, ax = plt.subplots()
 img = ax.imshow(images[1, :, :], cmap='gray')
@@ -63,15 +67,14 @@ ax.set_axis_off()
 plt.title(f'Image {file.name}')
 plt.show()
 
-
 # Extract images dates
 ref = pd.to_datetime("2015-01-01")
 dates = []
 class_names = "{Unchanged"
 print(images.shape)
-for date_str in band_descriptions:
-    temp = pd.to_datetime(date_str)
-    class_names = class_names + ", " + date_str
+for x in range(images.shape[0]):
+    temp = pd.to_datetime(data.GetRasterBand(x + 1).GetDescription())
+    class_names = class_names + ", " + data.GetRasterBand(x + 1).GetDescription()
     dates.append(temp)
 class_names = class_names + "}"
 dates = pd.to_datetime(dates)
@@ -80,78 +83,88 @@ start = time.time()
 t = np.array((dates - ref).days) / 365.25
 result = Parallel(n_jobs=8)(delayed(BreakPoint)(y=imagesT[i, :], x=t) for i in range(imagesT.shape[0]))
 result = np.array(result)
-result = result.transpose().reshape(result.shape[1], images.shape[1], images.shape[2]).transpose((1, 2, 0))
+result = result.transpose().reshape(result.shape[1], images.shape[1], images.shape[2])
 print(time.time() - start)
 
-
 # Writing change variable to a file
-out_file = Path(dirs.OUTPUT) / f'{file.stem}.tif'
-geofiles.write_tif(out_file, result, transform, crs)
 band_names = ["Ratio+ (CPT)", "Ratio- (CPT)", "KLD (CPT)", "Point (CPT)"]
-
+drive = gdal.GetDriverByName("GTiff")
+file = file.name.replace("Data", "Results").replace(".tif", " - Change Image")
+output_data = drive.Create(file, result.shape[2], result.shape[1], result.shape[0], gdal.GDT_Float32)
+output_data.SetProjection(data.GetProjection())
+output_data.SetGeoTransform(data.GetGeoTransform())
+for x in range(result.shape[0]):
+    rb = output_data.GetRasterBand(x + 1)
+    rb.SetDescription(band_names[x])
+    output_data.GetRasterBand(x + 1).WriteArray(result[x, :, :])
+output_data.FlushCache()
+output_data = None
+if os.path.exists(file + ".aux.xml"):
+    os.remove(file + ".aux.xml")
 """
 [2] Change maps (Kmean clustering)
 -----------------------------------------------------------------------------------------------------------------------------------------------------
 """
 
 # Open chaneg variable file
-Data = gdal.Open(File.replace("Data", "Results").replace(".tif", " - Change Image"), gdal.GA_ReadOnly)
-ChangeImage = Data.ReadAsArray()
+data = gdal.Open(file.replace("Data", "Results").replace(".tif", " - Change Image"), gdal.GA_ReadOnly)
+change_image = data.ReadAsArray()
 
 # Loop over chaneg vafriable to be classified
-ChangeMap = np.zeros((0, Images.shape[1], Images.shape[2])).astype(int)
-BandNames = []
+change_map = np.zeros((0, images.shape[1], images.shape[2])).astype(int)
+band_names = []
 for x in [0, 1, 2]:
     # Clean change variable
     # -----------------------------------------------------------------------------------------------------------------------------------------------
-    var = ChangeImage[x, :, :].reshape(-1, 1)
-    T1 = np.percentile(var, 2)
-    T2 = np.percentile(var, 98)
-    var[var < T1] = T1
-    var[var > T2] = T2
+    var = change_image[x, :, :].reshape(-1, 1)
+    t1 = np.percentile(var, 2)
+    t2 = np.percentile(var, 98)
+    var[var < t1] = t1
+    var[var > t2] = t2
 
     # Clustering using kmean
     # -----------------------------------------------------------------------------------------------------------------------------------------------
     clf = k_means(var, n_clusters=4, tol=0.0001, init="k-means++", n_jobs=4, algorithm="auto")
-    CM = clf[1] == np.argmax(clf[0])
-    CM = CM.reshape((ChangeImage[0, :, :].shape))
-    CM = ndimage.median_filter(CM == 1, size=7)
-    CM = morphology.remove_small_objects(CM == 1, min_size=16, connectivity=2)
-    ChangeMap = np.vstack((ChangeMap, CM[np.newaxis, ...]))
-    BandNames.append(Data.GetRasterBand(x + 1).GetDescription())
+    cm = clf[1] == np.argmax(clf[0])
+    cm = cm.reshape((change_map[0, :, :].shape))
+    cm = ndimage.median_filter(cm == 1, size=7)
+    cm = morphology.remove_small_objects(cm == 1, min_size=16, connectivity=2)
+    change_map = np.vstack((change_map, cm[np.newaxis, ...]))
+    band_names.append(data.GetRasterBand(x + 1).GetDescription())
     # Writing change map to a file
-Drive = gdal.GetDriverByName("GTiff")
-Filen = File.replace("Data", "Results").replace(".tif", " - Change Map (Kmean)")
-OutData = Drive.Create(Filen, ChangeMap.shape[2], ChangeMap.shape[1], ChangeMap.shape[0], gdal.GDT_Byte)
-OutData.SetProjection(Data.GetProjection())
-OutData.SetGeoTransform(Data.GetGeoTransform())
-for x in range(ChangeMap.shape[0]):
-    rb = OutData.GetRasterBand(x + 1)
-    rb.SetDescription(BandNames[x])
-    OutData.GetRasterBand(x + 1).WriteArray(ChangeMap[x, :, :])
-OutData.FlushCache()
-OutData = None
-if os.path.exists(Filen + ".aux.xml"): os.remove(Filen + ".aux.xml")
+drive = gdal.GetDriverByName("GTiff")
+filen = file.replace("Data", "Results").replace(".tif", " - Change Map (Kmean)")
+output_data = drive.Create(filen, change_map.shape[2], change_map.shape[1], change_map.shape[0], gdal.GDT_Byte)
+output_data.SetProjection(data.GetProjection())
+output_data.SetGeoTransform(data.GetGeoTransform())
+for x in range(change_map.shape[0]):
+    rb = output_data.GetRasterBand(x + 1)
+    rb.SetDescription(band_names[x])
+    output_data.GetRasterBand(x + 1).WriteArray(change_map[x, :, :])
+output_data.FlushCache()
+output_data = None
+if os.path.exists(filen + ".aux.xml"): os.remove(filen + ".aux.xml")
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 
-ChangeTime = np.zeros((0, Images.shape[1], Images.shape[2])).astype(int)
+change_time = np.zeros((0, images.shape[1], images.shape[2])).astype(int)
 for x in range(7):
 
     if x in [0, 1, 2]:
-        Temp = ChangeImage[3, :, :] * (ChangeMap[x, :, :] == 1)
-        Temp = measure.label(Temp > 0)
-        Range = np.unique(Temp)[1:]
-        CT = np.zeros((Temp.shape))
-        for y in Range:
-            idx = np.where(Temp == y)
-            CT[idx] = np.median(ChangeImage[3, :, :][idx])
-        ChangeTime = np.vstack((ChangeTime, CT[np.newaxis, ...]))
+        temp = change_image[3, :, :] * (change_image[x, :, :] == 1)
+        temp = measure.label(temp > 0)
+        range = np.unique(temp)[1:]
+        ct = np.zeros((temp.shape))
+        for y in range:
+            idx = np.where(temp == y)
+            ct[idx] = np.median(change_image[3, :, :][idx])
+        change_time = np.vstack((change_time, ct[np.newaxis, ...]))
+
 
         # Writing change time to a file
-Drive = gdal.GetDriverByName("GTiff")
-Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean)")
-OutData = Drive.Create(Filen, ChangeTime.shape[2], ChangeTime.shape[1], ChangeTime.shape[0], gdal.GDT_UInt16)
+drive = gdal.GetDriverByName("GTiff")
+file = file.replace("Data", "Results").replace(".tif", " - Change Time (Kmean)")
+OutData = Drive.Create(file, ChangeTime.shape[2], ChangeTime.shape[1], ChangeTime.shape[0], gdal.GDT_UInt16)
 OutData.SetProjection(Data.GetProjection())
 OutData.SetGeoTransform(Data.GetGeoTransform())
 for x in range(ChangeTime.shape[0]):

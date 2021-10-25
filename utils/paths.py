@@ -2,9 +2,11 @@ from pathlib import Path
 from fvcore.common.config import CfgNode as _CfgNode
 
 # set the paths
-HOME = 'C:/Users/shafner/reps/bua_cd_sar'
-DATA = 'C:/Users/shafner/osama_urban_change_detection/drive'
-OUTPUT = 'C:/Users/shafner/osama_urban_change_detection/output'
+HOME = 'C:/Users/hafne/repos/bua_cd_sar'
+DATA = 'C:/Users/hafne/bua_cd_sar/drive'
+OUTPUT = 'C:/Users/hafne/bua_cd_sar/output'
+SN7_TIMESTAMPS_FILE = ''
+SN7_ORBITS_FILE = ''
 
 
 class CfgNode(_CfgNode):
@@ -39,6 +41,8 @@ def load_paths() -> CfgNode:
     C.HOME = HOME
     C.DATA = DATA
     C.OUTPUT = OUTPUT
+    C.SN7_TIMESTAMPS_FILE = SN7_TIMESTAMPS_FILE
+    C.SN7_ORBITS_FILE = SN7_ORBITS_FILE
     return C.clone()
 
 
@@ -48,6 +52,14 @@ def setup_directories():
     # inference dir
     output_dir = Path(dirs.OUTPUT)
     output_dir.mkdir(exist_ok=True)
+
+    # change variables
+    cv_dir = Path(dirs.OUTPUT) / 'change_variables'
+    cv_dir.mkdir(exist_ok=True)
+
+    # change maps
+    cm_dir = Path(dirs.OUTPUT) / 'change_maps'
+    cm_dir.mkdir(exist_ok=True)
 
     # plots
     plots_dir = Path(dirs.OUTPUT) / 'plots'
