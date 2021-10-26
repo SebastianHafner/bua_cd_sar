@@ -10,7 +10,7 @@ from osgeo import gdal
 import ruptures as rpt
 import calendar
 from skimage import morphology
-from sklearn.cluster import k_means
+from sklearn import cluster
 from skimage import measure
 import seaborn as sns
 
@@ -51,21 +51,20 @@ def BreakPoint(y, x):
     return [Ratio11, Ratio12, KLD1, Points1]
 
 
+aoi_id = 'stockholm_test'
+file_name = f'{aoi_id}.tif'
+
 dirs = paths.load_paths()
-file = Path(dirs.DATA) / 'test.tif'
+data_dir = Path(dirs.DATA)
+out_dir = Path(dirs.OUTPUT)
+input_file = Path(dirs.DATA) / file_name
 
 # images, transform, crs = geofiles.read_tif(file)
 
-data = gdal.Open(str(file), gdal.GA_ReadOnly)
+data = gdal.Open(str(input_file), gdal.GA_ReadOnly)
 images = data.ReadAsArray()
 imagesT = np.reshape(images, (images.shape[0], images.shape[1] * images.shape[2])).transpose()
 # Dates   = np.array((Dates - Ref).days) / 365.25
-
-fig, ax = plt.subplots()
-img = ax.imshow(images[1, :, :], cmap='gray')
-ax.set_axis_off()
-plt.title(f'Image {file.name}')
-plt.show()
 
 # Extract images dates
 ref = pd.to_datetime("2015-01-01")
@@ -89,8 +88,8 @@ print(time.time() - start)
 # Writing change variable to a file
 band_names = ["Ratio+ (CPT)", "Ratio- (CPT)", "KLD (CPT)", "Point (CPT)"]
 drive = gdal.GetDriverByName("GTiff")
-file = file.name.replace("Data", "Results").replace(".tif", " - Change Image")
-output_data = drive.Create(file, result.shape[2], result.shape[1], result.shape[0], gdal.GDT_Float32)
+out_file = out_dir / f'{aoi_id} - Change Image.tif'
+output_data = drive.Create(str(out_file), result.shape[2], result.shape[1], result.shape[0], gdal.GDT_Float32)
 output_data.SetProjection(data.GetProjection())
 output_data.SetGeoTransform(data.GetGeoTransform())
 for x in range(result.shape[0]):
@@ -99,16 +98,16 @@ for x in range(result.shape[0]):
     output_data.GetRasterBand(x + 1).WriteArray(result[x, :, :])
 output_data.FlushCache()
 output_data = None
-if os.path.exists(file + ".aux.xml"):
-    os.remove(file + ".aux.xml")
+
 """
 [2] Change maps (Kmean clustering)
 -----------------------------------------------------------------------------------------------------------------------------------------------------
 """
 
 # Open chaneg variable file
-data = gdal.Open(file.replace("Data", "Results").replace(".tif", " - Change Image"), gdal.GA_ReadOnly)
+data = gdal.Open(str(out_file), gdal.GA_ReadOnly)
 change_image = data.ReadAsArray()
+print(np.sum(change_image))
 
 # Loop over chaneg vafriable to be classified
 change_map = np.zeros((0, images.shape[1], images.shape[2])).astype(int)
@@ -122,11 +121,15 @@ for x in [0, 1, 2]:
     var[var < t1] = t1
     var[var > t2] = t2
 
+    print(np.sum(var))
+
     # Clustering using kmean
     # -----------------------------------------------------------------------------------------------------------------------------------------------
-    clf = k_means(var, n_clusters=4, tol=0.0001, init="k-means++", n_jobs=4, algorithm="auto")
+    clf = cluster.k_means(var, n_clusters=4, tol=0.0001, init="k-means++", algorithm="auto")
     cm = clf[1] == np.argmax(clf[0])
-    cm = cm.reshape((change_map[0, :, :].shape))
+    print(np.sum(cm))
+
+    cm = cm.reshape((change_map.shape[1], change_map.shape[2]))
     cm = ndimage.median_filter(cm == 1, size=7)
     cm = morphology.remove_small_objects(cm == 1, min_size=16, connectivity=2)
     change_map = np.vstack((change_map, cm[np.newaxis, ...]))

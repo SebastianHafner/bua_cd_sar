@@ -7,7 +7,7 @@ from joblib import Parallel, delayed
 import ruptures as rpt
 import calendar
 from skimage import morphology
-from sklearn.cluster import k_means
+from sklearn import cluster
 from skimage import measure
 import seaborn as sns
 
@@ -78,7 +78,6 @@ def extract_change_variables(images: np.ndarray, dates: list, parallelize: bool 
 
 # produces change maps with kmean clustering
 def change_mapping(change_variables: np.ndarray) -> np.ndarray:
-
     m, n, n_variables = change_variables.shape
     change_maps = []
 
@@ -91,9 +90,9 @@ def change_mapping(change_variables: np.ndarray) -> np.ndarray:
         var[var < t1] = t1
         var[var > t2] = t2
 
-        # Clustering using kmean
-        clf = k_means(var, n_clusters=4, tol=0.0001, init="k-means++", n_jobs=4, algorithm="auto")
-        change_map = clf[1] == np.argmax(clf[0])
+        # clustering using kmean: highest cluster for change variable is change
+        centers, labels, _ = cluster.k_means(var, n_clusters=4, tol=0.0001, init="k-means++", algorithm="auto")
+        change_map = labels == np.argmax(centers)
         change_map = change_map.reshape((m, n))
         change_map = ndimage.median_filter(change_map == 1, size=7)
         change_map = morphology.remove_small_objects(change_map == 1, min_size=16, connectivity=2)
@@ -101,72 +100,46 @@ def change_mapping(change_variables: np.ndarray) -> np.ndarray:
 
     change_maps = np.stack(change_maps, axis=-1)
 
-    return change_maps
+    return change_maps.astype(np.int8)
 
 
-def change_dating(change_variables: np.ndarray) -> np.ndarray:
-    change_variables
-    ChangeTime = np.zeros((0, Images.shape[1], Images.shape[2])).astype(int)
-    for x in range(7):
-
-        if x in [0, 1, 2]:
-            Temp = ChangeImage[3, :, :] * (ChangeMap[x, :, :] == 1)
-            Temp = measure.label(Temp > 0)
-            Range = np.unique(Temp)[1:]
-            CT = np.zeros((Temp.shape))
-            for y in Range:
-                idx = np.where(Temp == y)
-                CT[idx] = np.median(ChangeImage[3, :, :][idx])
-            ChangeTime = np.vstack((ChangeTime, CT[np.newaxis, ...]))
-
-            # Writing change time to a file
-    Drive = gdal.GetDriverByName("GTiff")
-    Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean)")
-    OutData = Drive.Create(Filen, ChangeTime.shape[2], ChangeTime.shape[1], ChangeTime.shape[0], gdal.GDT_UInt16)
-    OutData.SetProjection(Data.GetProjection())
-    OutData.SetGeoTransform(Data.GetGeoTransform())
-    for x in range(ChangeTime.shape[0]):
-        rb = OutData.GetRasterBand(x + 1)
-        rb.SetDescription(BandNames[x])
-        OutData.GetRasterBand(x + 1).WriteArray(ChangeTime[x, :, :])
-    OutData.FlushCache()
-    OutData = None
-    if os.path.exists(Filen + ".aux.xml"): os.remove(Filen + ".aux.xml")
-    #   Adding metadata item to the heder file (file type : classification)
-    Temp = (np.array(sns.color_palette(n_colors=Images.shape[0])) * 255).astype(int).flatten()
-    color = "{0, 0, 0"
-    for x in range(len(Temp)): color = color + ", " + str(Temp[x])
-    color = color + "}"
-    with open(Filen + '.hdr', "a") as myfile:
-        myfile.write("classes = " + str(Images.shape[0] + 1) + "\n")
-        myfile.write("class names = " + ClassNames + "\n")
-        myfile.write("class lookup = " + color + "\n")
-    pass
+def change_dating(change_variables: np.ndarray, change_maps: np.ndarray) -> np.ndarray:
+    m, n , n_variables = change_variables.shape
+    change_times = []
+    for x in range(3):
+        temp = change_variables[:, :, 3] * (change_maps[:, :, x] == 1)
+        # What does measure.label do ?
+        temp = measure.label(temp > 0)
+        time_range = np.unique(temp)[1:]
+        CT = np.zeros((temp.shape))
+        for y in time_range:
+            idx = np.where(temp == y)
+            CT[idx] = np.median(change_variables[:, :, 3][idx])
+        change_times.append(CT)
+    change_times = np.stack(change_times)
+    return change_times
 
 
-def change_aggregation() -> np.ndarray:
+# temporally aggregate changes
+def change_aggregation(change_time: np.ndarray, dates: list, months: int = 3) -> np.ndarray:
 
-    step = 3
-    ClassNames = "{Unchanged"
-    CT = np.zeros((ChangeTime.shape)).astype(int)
+    change_times_agg = []
 
+    # TODO: get years from dates
     for y in [2017, 2018, 2019]:
-        for m in np.arange(1, 12, step):
-
-            idx1 = np.logical_and(np.logical_and(Dates.month >= m, Dates.month <= m + step - 1), Dates.year == y)
+        for m in np.arange(1, 12, months):
+            idx1 = np.logical_and(np.logical_and(dates.month >= m, dates.month <= m + months - 1), dates.year == y)
             idx1 = np.argwhere(idx1) + 1
             if len(idx1) == 0:
                 continue
             Max = np.max(idx1)
             Min = np.min(idx1)
-            idx2 = np.logical_and(ChangeTime >= Min, ChangeTime <= Max)
+            idx2 = np.logical_and(change_time >= Min, change_time <= Max)
             if (~idx2).all():
                 continue
             CT[idx2] = np.max(CT) + 1
-            ClassNames = ClassNames + ", " + str(y) + ": " + calendar.month_abbr[m] + " - " + calendar.month_abbr[
-                m + step - 1]
-    ClassNames = ClassNames + "}"
 
+    return change_times_agg
 
 def write_header_file(date_strings: list):
     class_names = "{Unchanged"
@@ -184,14 +157,26 @@ def write_header_file(date_strings: list):
         myfile.write("classes = " + str(np.max(CT + 1)) + "\n")
         myfile.write("class names = " + ClassNames + "\n")
         myfile.write("class lookup = " + color + "\n")
-    pass
 
+    Temp = (np.array(sns.color_palette(n_colors=Images.shape[0])) * 255).astype(int).flatten()
+    color = "{0, 0, 0"
+    for x in range(len(Temp)): color = color + ", " + str(Temp[x])
+    color = color + "}"
+    with open(Filen + '.hdr', "a") as myfile:
+        myfile.write("classes = " + str(Images.shape[0] + 1) + "\n")
+        myfile.write("class names = " + ClassNames + "\n")
+        myfile.write("class lookup = " + color + "\n")
     pass
+    class_names = "{Unchanged"
+    ClassNames = ClassNames + ", " + str(y) + ": " + calendar.month_abbr[m] + " - " + calendar.month_abbr[
+        m + step - 1]
 
+
+    ClassNames = ClassNames + "}"
 
 if __name__ == '__main__':
 
-    aoi_id = 'test'
+    aoi_id = 'stockholm_test'
 
     dirs = paths.load_paths()
     timeseries_file = Path(dirs.DATA) / f'{aoi_id}.tif'
@@ -205,8 +190,14 @@ if __name__ == '__main__':
     # geofiles.write_tif(cv_file, change_variables, transform, crs)
 
     change_variables, *_ = geofiles.read_tif(cv_file)
-    change_map = change_mapping(change_variables)
+    change_maps = change_mapping(change_variables)
 
+    # cm_file = Path(dirs.OUTPUT) / 'change_maps' / f'change_maps_{aoi_id}.tif'
+    # geofiles.write_tif(cm_file, change_maps, transform, crs)
+    change_times = change_dating(change_variables, change_maps)
+
+    ct_file = Path(dirs.OUTPUT) / 'change_times' / f'change_times_{aoi_id}.tif'
+    geofiles.write_tif(ct_file, change_times, transform, crs)
 
 
 
