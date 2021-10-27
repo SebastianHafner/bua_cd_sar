@@ -63,8 +63,8 @@ def extract_change_variables(images: np.ndarray, dates: list, parallelize: bool 
         images = images.transpose((2, 0, 1))
         imagesT = np.reshape(images, (n_images, n_pixels)).transpose()
         change_variables = Parallel(n_jobs=8)(delayed(change_detection_algorithm)(y=imagesT[i, :], x=t) for i in range(n_pixels))
-        change_variables = np.array(change_variables)  # (n_pixels, 4)
-        change_variables = change_variables.transpose().reshape(4, m, n).transpose((1, 2, 0))
+        # change shape from (n_pixels, 4) to (m, n, 4) where 4 is n change variables
+        change_variables = np.array(change_variables).transpose().reshape(4, m, n).transpose((1, 2, 0))
     else:
         change_variables = np.zeros((m, n, 4), dtype=np.single)
         for i in tqdm(range(n_pixels)):
@@ -105,17 +105,22 @@ def change_mapping(change_variables: np.ndarray) -> np.ndarray:
 
 def change_dating(change_variables: np.ndarray, change_maps: np.ndarray) -> np.ndarray:
     m, n , n_variables = change_variables.shape
+    break_point = change_variables[:, :, 3]
     change_times = []
     for x in range(3):
-        temp = change_variables[:, :, 3] * (change_maps[:, :, x] == 1)
-        # What does measure.label do ?
+        is_change = change_maps[:, :, x] == 1
+        temp = is_change * break_point
+
+        # find connected regions
+        # https://scikit-image.org/docs/dev/api/skimage.measure.html#skimage.measure.label
         temp = measure.label(temp > 0)
+
         time_range = np.unique(temp)[1:]
-        CT = np.zeros((temp.shape))
+        change_time = np.zeros((m, n))
         for y in time_range:
             idx = np.where(temp == y)
-            CT[idx] = np.median(change_variables[:, :, 3][idx])
-        change_times.append(CT)
+            change_time[idx] = np.median(break_point[idx])
+        change_times.append(change_time)
     change_times = np.stack(change_times)
     return change_times
 
@@ -137,9 +142,10 @@ def change_aggregation(change_time: np.ndarray, dates: list, months: int = 3) ->
             idx2 = np.logical_and(change_time >= Min, change_time <= Max)
             if (~idx2).all():
                 continue
-            CT[idx2] = np.max(CT) + 1
+            change_time[idx2] = np.max(change_time) + 1
 
     return change_times_agg
+
 
 def write_header_file(date_strings: list):
     class_names = "{Unchanged"

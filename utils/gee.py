@@ -1,31 +1,39 @@
 import ee
+import utm
+from utils import sn7_helpers
+
 ee.Initialize()
 
 
-def create_bbox(west: float, south: float, east: float, north: float) -> ee.Geometry:
-    return ee.Geometry.BBox(west, south, east, north)
+def bounding_box(coords: list, crs: str):
+    return ee.Geometry.Rectangle(coords, proj=str(crs)).transform('EPSG:4326')
 
 
-def collect_data(coords: list, orbit: int, polarization: str, start_date: str, end_date: str) -> ee.Image:
-    patch_size = 2
-    index1 = 0 / patch_size
-    index2 = 0 / patch_size
-    PatchROI = [1, 2, 3, 4]
-    PatchROI[0] = coords[0] * (1 - index1) + coords[2] * index1
-    PatchROI[2] = coords[0] * (1 - 1 / patch_size - index1) + coords[2] * (index1 + 1 / patch_size)
-    PatchROI[1] = coords[1] * (1 - index2) + coords[3] * index2
-    PatchROI[3] = coords[1] * (1 - 1 / patch_size - index2) + coords[3] * (index2 + 1 / patch_size)
+def epsg_utm(bbox: ee.Geometry):
+    center_point = bbox.centroid()
+    coords = center_point.getInfo()['coordinates']
+    lon, lat = coords
+    easting, northing, zone_number, zone_letter = utm.from_latlon(lat, lon)
+    return f'EPSG:326{zone_number}' if lat > 0 else f'EPSG:327{zone_number}'
 
-    OutputROI = ee.Geometry.Rectangle(PatchROI)
-    coordList = ee.List(OutputROI.coordinates().get(0))
-    p0 = ee.Geometry.Point(coordList.get(0))
-    p1 = ee.Geometry.Point(coordList.get(1))
-    p2 = ee.Geometry.Point(coordList.get(2))
-    p3 = ee.Geometry.Point(coordList.get(3))
+
+def new_buildings(aoi_id: str, start_year: int, start_month: int, end_year: int, end_month: int) -> ee.FeatureCollection:
+    building_footprints = sn7_helpers.get_new_buildings(aoi_id, start_year, start_month, end_year, end_month)
+    features = building_footprints['features']
+    new_features = []
+    for feature in features:
+        coords = feature['geometry']['coordinates']
+        geom = ee.Geometry.Polygon(coords, proj='EPSG:3857').transform('EPSG:4326')
+        new_feature = ee.Feature(geom)
+        new_features.append(new_feature)
+    return ee.FeatureCollection(new_features)
+
+
+def collect_sar_images(roi: ee.Geometry, orbit: int, polarization: str, start_date: str, end_date: str) -> ee.Image:
 
     s1 = ee.ImageCollection('COPERNICUS/S1_GRD') \
-        .filterBounds(p0).filterBounds(p1).filterBounds(p2).filterBounds(p3) \
-        .filterDate(start_date, end_date) \
+        .filterBounds(roi)\
+        .filterDate(start_date, end_date)\
         .filter(ee.Filter.eq('relativeOrbitNumber_stop', orbit)) \
         .filter(ee.Filter.listContains('transmitterReceiverPolarisation', polarization))
 
@@ -42,6 +50,11 @@ def collect_data(coords: list, orbit: int, polarization: str, start_date: str, e
         img = img.addBands(img2.rename(img2.date().format().slice(0, 10)))
 
     return img
+
+
+def generate_label(aoi_id: str, start_year: int, start_month: int, end_year: int, end_month: int):
+
+    pass
 
 if __name__ == '__main__':
     pass

@@ -45,11 +45,11 @@ def get_orbit(aoi_id: str) -> int:
     return orbit
 
 
-def get_coords(aoi_id: str) -> list:
+def get_geo(aoi_id: str) -> tuple:
     dirs = paths.load_paths()
     year, month = get_start_date(aoi_id)
     file = Path(dirs.SN7_RAW) / 'train' / aoi_id / 'images' / f'global_monthly_{year}_{month:02d}_mosaic_{aoi_id}.tif'
-    arr, transform, *_ = geofiles.read_tif(file)
+    arr, transform, crs, _ = geofiles.read_tif(file)
     m, n, _ = arr.shape
     x_res, _, x_min, _, y_res, y_max, *_ = transform
 
@@ -57,12 +57,33 @@ def get_coords(aoi_id: str) -> list:
     south = y_max + m * y_res
     east = x_min + n * x_res
     north = y_max
-    return [west, south, east, north]
+    return [west, south, east, north], crs
 
 
-def get_crs(aoi_id: str) -> str:
+def get_building_footprints(aoi_id: str, year: int, month: int) -> dict:
     dirs = paths.load_paths()
-    year, month = get_start_date(aoi_id)
-    file = Path(dirs.SN7_RAW) / 'train' / aoi_id / 'images' / f'global_monthly_{year}_{month:02d}_mosaic_{aoi_id}.tif'
-    _, _, crs, _ = geofiles.read_tif(file)
-    return crs
+    label_folder = Path(dirs.SN7_RAW) / 'train' / aoi_id / 'labels_match'
+    label_file = label_folder / f'global_monthly_{year}_{month:02d}_mosaic_{aoi_id}_Buildings.geojson'
+    label_data = geofiles.load_json(label_file)
+    return label_data
+
+
+def get_building_ids(aoi_id: str, year: int, month: int) -> list:
+    building_footprints = get_building_footprints(aoi_id, year, month)
+    ids = [f['properties']['Id'] for f in building_footprints['features']]
+    return ids
+
+
+def get_new_buildings(aoi_id: str, start_year: int, start_month: int, end_year: int, end_month: int):
+    building_footprints = get_building_footprints(aoi_id, end_year, end_month)
+    start_ids = get_building_ids(aoi_id, start_year, start_month)
+    end_ids = get_building_ids(aoi_id, end_year, end_month)
+    new_ids = [building_id for building_id in end_ids if building_id not in start_ids]
+    new_buildings = [f for f in building_footprints['features'] if f['properties']['Id'] in new_ids]
+    building_footprints['features'] = new_buildings
+    return building_footprints
+
+
+if __name__ == '__main__':
+    # get_building_footprints('L15-0331E-1257N_1327_3160_13', 2018, 1)
+    get_new_buildings('L15-0331E-1257N_1327_3160_13', 2018, 1, 2020, 1)

@@ -1,4 +1,3 @@
-# Import the Earth Engine API and initialize it.
 import ee
 from utils import gee, sn7_helpers
 
@@ -12,20 +11,20 @@ def download_sn7_images(aoi_id: str):
 
     orbit = sn7_helpers.get_orbit(aoi_id)
 
-    coords = sn7_helpers.get_coords(aoi_id)
-    crs = sn7_helpers.get_crs(aoi_id)
+    coords, crs = sn7_helpers.get_geo(aoi_id)
+    roi = gee.bounding_box(coords, crs)
+    crs = gee.epsg_utm(roi)
+    roi = roi.transform(crs, 0.001)
 
     metadata = {
-        'aoi_id': aoi_id,
-        'coords': coords,
-        'crs': crs,
-        'start_date': f'{start_year}-{start_month:2d}-01',
-        'end_date': f'{end_year}-{end_month:2d}-01',
+        'roi': roi,
+        'start_date': f'{start_year}-{start_month:02d}-01',
+        'end_date': f'{end_year}-{end_month:02d}-01',
         'orbit': orbit,
         'polarization': 'VV',
     }
 
-    img = gee.collect_data(**metadata)
+    img = gee.collect_sar_images(**metadata)
 
     XX = img.bandNames()
     print(XX.getInfo())
@@ -37,28 +36,58 @@ def download_sn7_images(aoi_id: str):
         scale=10,
         maxPixels=1e12,
         crs=crs,
-        region=gee.create_bbox(*metadata['coords'])
+        region=roi,
     )
-
-    import time
 
     # Start the task.
     imageTask.start()
 
-    while imageTask.active():
-        print('Polling for task (id: {}).'.format(imageTask.id))
-        time.sleep(10)
-    print('Done with image export.')
 
-
-# TODO: implement
 def downnload_sn7_labels(aoi_id: str):
-    pass
+
+    start_year, start_month = sn7_helpers.get_start_date(aoi_id)
+    end_year, end_month = sn7_helpers.get_end_date(aoi_id)
+
+    coords, crs = sn7_helpers.get_geo(aoi_id)
+    roi = gee.bounding_box(coords, crs)
+    crs = gee.epsg_utm(roi)
+    roi = roi.transform(crs, 0.001)
+
+    fc = gee.new_buildings(aoi_id, start_year, start_month, end_year, end_month)
+    fc = fc.filterBounds(roi)
+    print(fc.size().getInfo())
+
+    fc = fc.map(lambda f: ee.Feature(f).set({'new_bua': 1}))
+
+    bua_new = fc.reduceToImage(['new_bua'], ee.Reducer.first()).unmask().float().rename('new_bua')
+
+    bua_new = bua_new \
+        .reproject(crs=crs, scale=1) \
+        .reduceResolution(reducer=ee.Reducer.mean(), maxPixels=1000) \
+        .reproject(crs=crs, scale=10) \
+        .rename('new_bua_percentage')
+
+    img_name = f'label_{aoi_id}'
+    dl_desc = f'{aoi_id}LabelDownload'
+
+    imageTask = ee.batch.Export.image.toDrive(
+        image=bua_new,
+        fileNamePrefix=img_name,
+        description=dl_desc,
+        folder="bua_cd_sar",
+        scale=10,
+        maxPixels=1e12,
+        crs=crs,
+        region=roi,
+    )
+
+    # Start the task.
+    imageTask.start()
 
 
 if __name__ == '__main__':
-    # coords: [west, south, east, north]
     for i, aoi_id in enumerate(sn7_helpers.get_aoi_ids()):
-        download_sn7_images(aoi_id)
-        if i > 0:
+        # download_sn7_images(aoi_id)
+        downnload_sn7_labels(aoi_id)
+        if i > 5:
             break
