@@ -88,7 +88,7 @@ print(time.time() - start)
 # Writing change variable to a file
 band_names = ["Ratio+ (CPT)", "Ratio- (CPT)", "KLD (CPT)", "Point (CPT)"]
 drive = gdal.GetDriverByName("GTiff")
-out_file = out_dir / f'{aoi_id} - Change Image.tif'
+out_file = out_dir / 'results' / f'{aoi_id} - Change Image.tif'
 output_data = drive.Create(str(out_file), result.shape[2], result.shape[1], result.shape[0], gdal.GDT_Float32)
 output_data.SetProjection(data.GetProjection())
 output_data.SetGeoTransform(data.GetGeoTransform())
@@ -136,8 +136,8 @@ for x in [0, 1, 2]:
     band_names.append(data.GetRasterBand(x + 1).GetDescription())
     # Writing change map to a file
 drive = gdal.GetDriverByName("GTiff")
-filen = file.replace("Data", "Results").replace(".tif", " - Change Map (Kmean)")
-output_data = drive.Create(filen, change_map.shape[2], change_map.shape[1], change_map.shape[0], gdal.GDT_Byte)
+file = out_dir / 'results' / f'{aoi_id} - Change Map (Kmean).tif'
+output_data = drive.Create(str(file), change_map.shape[2], change_map.shape[1], change_map.shape[0], gdal.GDT_Byte)
 output_data.SetProjection(data.GetProjection())
 output_data.SetGeoTransform(data.GetGeoTransform())
 for x in range(change_map.shape[0]):
@@ -146,7 +146,8 @@ for x in range(change_map.shape[0]):
     output_data.GetRasterBand(x + 1).WriteArray(change_map[x, :, :])
 output_data.FlushCache()
 output_data = None
-if os.path.exists(filen + ".aux.xml"): os.remove(filen + ".aux.xml")
+if os.path.exists(str(file) + ".aux.xml"):
+    os.remove(str(file) + ".aux.xml")
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -166,8 +167,8 @@ for x in range(7):
 
         # Writing change time to a file
 drive = gdal.GetDriverByName("GTiff")
-file = file.replace("Data", "Results").replace(".tif", " - Change Time (Kmean)")
-OutData = Drive.Create(file, ChangeTime.shape[2], ChangeTime.shape[1], ChangeTime.shape[0], gdal.GDT_UInt16)
+file = out_dir / 'results' / f'{aoi_id} - Change Time (Kmean).tif'
+OutData = drive.Create(str(file), ChangeTime.shape[2], ChangeTime.shape[1], ChangeTime.shape[0], gdal.GDT_UInt16)
 OutData.SetProjection(Data.GetProjection())
 OutData.SetGeoTransform(Data.GetGeoTransform())
 for x in range(ChangeTime.shape[0]):
@@ -176,13 +177,14 @@ for x in range(ChangeTime.shape[0]):
     OutData.GetRasterBand(x + 1).WriteArray(ChangeTime[x, :, :])
 OutData.FlushCache()
 OutData = None
-if os.path.exists(Filen + ".aux.xml"): os.remove(Filen + ".aux.xml")
+if os.path.exists(str(file) + ".aux.xml"):
+    os.remove(str(file) + ".aux.xml")
 #   Adding metadata item to the heder file (file type : classification)
 Temp = (np.array(sns.color_palette(n_colors=Images.shape[0])) * 255).astype(int).flatten()
 color = "{0, 0, 0"
 for x in range(len(Temp)): color = color + ", " + str(Temp[x])
 color = color + "}"
-with open(Filen + '.hdr', "a") as myfile:
+with open(str(file) + '.hdr', "a") as myfile:
     myfile.write("classes = " + str(Images.shape[0] + 1) + "\n")
     myfile.write("class names = " + ClassNames + "\n")
     myfile.write("class lookup = " + color + "\n")
@@ -196,8 +198,8 @@ with open(Filen + '.hdr', "a") as myfile:
 """
 
 # Open change time map
-Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean)")
-Data = gdal.Open(Filen, gdal.GA_ReadOnly)
+file = out_dir / 'results' / f'{aoi_id} - Change Time (Kmean)'
+Data = gdal.Open(str(file), gdal.GA_ReadOnly)
 ChangeTime = Data.ReadAsArray()
 
 step = 3
@@ -223,8 +225,8 @@ ClassNames = ClassNames + "}"
 
 # Writing aggregated change time to a file
 Drive = gdal.GetDriverByName("GTiff")
-Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean) - agg")
-OutData = Drive.Create(Filen, CT.shape[2], CT.shape[1], CT.shape[0], gdal.GDT_UInt16)
+file = out_dir / 'results' / f'{aoi_id} -  - Change Time (Kmean) - agg.tif'
+OutData = Drive.Create(str(file), CT.shape[2], CT.shape[1], CT.shape[0], gdal.GDT_UInt16)
 OutData.SetProjection(Data.GetProjection())
 OutData.SetGeoTransform(Data.GetGeoTransform())
 for x in range(CT.shape[0]):
@@ -233,13 +235,14 @@ for x in range(CT.shape[0]):
     OutData.GetRasterBand(x + 1).WriteArray(CT[x, :, :])
 OutData.FlushCache()
 OutData = None
-if os.path.exists(Filen + ".aux.xml"): os.remove(Filen + ".aux.xml")
+if os.path.exists(str(file) + ".aux.xml"): os.remove(str(file) + ".aux.xml")
 #   Adding metadata item to the heder file (file type : classification)
 Temp = (np.array(sns.color_palette(n_colors=np.max(CT))) * 255).astype(int).flatten()
 color = "{0, 0, 0"
-for x in range(len(Temp)): color = color + ", " + str(Temp[x])
+for x in range(len(Temp)):
+    color = color + ", " + str(Temp[x])
 color = color + "}"
-with open(Filen + '.hdr', "a") as myfile:
+with open(str(file) + '.hdr', "a") as myfile:
     myfile.write("classes = " + str(np.max(CT + 1)) + "\n")
     myfile.write("class names = " + ClassNames + "\n")
     myfile.write("class lookup = " + color + "\n")

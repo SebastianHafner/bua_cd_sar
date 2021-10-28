@@ -73,7 +73,7 @@ def extract_change_variables(images: np.ndarray, dates: list, parallelize: bool 
             backscatter_timeseries = images[i, j, :]
             change_variables[i, j, :] = change_detection_algorithm(backscatter_timeseries, t)
 
-    return change_variables
+    return change_variables.astype(np.single)
 
 
 # produces change maps with kmean clustering
@@ -91,7 +91,7 @@ def change_mapping(change_variables: np.ndarray) -> np.ndarray:
         var[var > t2] = t2
 
         # clustering using kmean: highest cluster for change variable is change
-        centers, labels, _ = cluster.k_means(var, n_clusters=4, tol=0.0001, init="k-means++", algorithm="auto")
+        centers, labels, _ = cluster.k_means(var, n_clusters=4, tol=0.0001, init="k-means++", algorithm="auto", random_state=7)
         change_map = labels == np.argmax(centers)
         change_map = change_map.reshape((m, n))
         change_map = ndimage.median_filter(change_map == 1, size=7)
@@ -121,7 +121,7 @@ def change_dating(change_variables: np.ndarray, change_maps: np.ndarray) -> np.n
             idx = np.where(temp == y)
             change_time[idx] = np.median(break_point[idx])
         change_times.append(change_time)
-    change_times = np.stack(change_times)
+    change_times = np.stack(change_times, axis=-1)
     return change_times
 
 
@@ -147,39 +147,6 @@ def change_aggregation(change_time: np.ndarray, dates: list, months: int = 3) ->
     return change_times_agg
 
 
-def write_header_file(date_strings: list):
-    class_names = "{Unchanged"
-    print(images.shape)
-    for date_str in date_strings:
-        class_names = class_names + ", " + date_str
-    class_names = class_names + "}"
-
-    # change aggregation
-    Temp = (np.array(sns.color_palette(n_colors=np.max(CT))) * 255).astype(int).flatten()
-    color = "{0, 0, 0"
-    for x in range(len(Temp)): color = color + ", " + str(Temp[x])
-    color = color + "}"
-    with open(Filen + '.hdr', "a") as myfile:
-        myfile.write("classes = " + str(np.max(CT + 1)) + "\n")
-        myfile.write("class names = " + ClassNames + "\n")
-        myfile.write("class lookup = " + color + "\n")
-
-    Temp = (np.array(sns.color_palette(n_colors=Images.shape[0])) * 255).astype(int).flatten()
-    color = "{0, 0, 0"
-    for x in range(len(Temp)): color = color + ", " + str(Temp[x])
-    color = color + "}"
-    with open(Filen + '.hdr', "a") as myfile:
-        myfile.write("classes = " + str(Images.shape[0] + 1) + "\n")
-        myfile.write("class names = " + ClassNames + "\n")
-        myfile.write("class lookup = " + color + "\n")
-    pass
-    class_names = "{Unchanged"
-    ClassNames = ClassNames + ", " + str(y) + ": " + calendar.month_abbr[m] + " - " + calendar.month_abbr[
-        m + step - 1]
-
-
-    ClassNames = ClassNames + "}"
-
 if __name__ == '__main__':
 
     aoi_id = 'stockholm_test'
@@ -192,17 +159,17 @@ if __name__ == '__main__':
     # change_variables = extract_change_variables(images, date_strings, parallelize=True)
     # visualization.visualize_change_variables(change_variables)
 
-    cv_file = Path(dirs.OUTPUT) / 'change_variables' / f'change_variables_{aoi_id}.tif'
+    cv_file = Path(dirs.OUTPUT) / 'results' / f'{aoi_id}_change_variables.tif'
     # geofiles.write_tif(cv_file, change_variables, transform, crs)
 
     change_variables, *_ = geofiles.read_tif(cv_file)
     change_maps = change_mapping(change_variables)
 
-    # cm_file = Path(dirs.OUTPUT) / 'change_maps' / f'change_maps_{aoi_id}.tif'
-    # geofiles.write_tif(cm_file, change_maps, transform, crs)
+    cm_file = Path(dirs.OUTPUT) / 'results' / f'{aoi_id}_change_maps.tif'
+    geofiles.write_tif(cm_file, change_maps, transform, crs)
     change_times = change_dating(change_variables, change_maps)
 
-    ct_file = Path(dirs.OUTPUT) / 'change_times' / f'change_times_{aoi_id}.tif'
+    ct_file = Path(dirs.OUTPUT) / 'results' / f'{aoi_id}_change_times.tif'
     geofiles.write_tif(ct_file, change_times, transform, crs)
 
 
