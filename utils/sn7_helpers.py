@@ -84,6 +84,14 @@ def get_new_buildings(aoi_id: str, start_year: int, start_month: int, end_year: 
     return building_footprints
 
 
+def load_sn7_planet_mosaic(aoi_id: str, year: int, month: int):
+    dirs = paths.load_paths()
+    images_folder = Path(dirs.SN7_RAW) / 'train' / aoi_id / 'images'
+    file = images_folder / f'global_monthly_{year}_{month:02d}_mosaic_{aoi_id}.tif'
+    data, *_ = geofiles.read_tif(file)
+    return data
+
+
 if __name__ == '__main__':
     # get_building_footprints('L15-0331E-1257N_1327_3160_13', 2018, 1)
     get_new_buildings('L15-0331E-1257N_1327_3160_13', 2018, 1, 2020, 1)

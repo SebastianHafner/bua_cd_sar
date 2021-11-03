@@ -1,5 +1,6 @@
 import ee
 import utm
+import numpy as np
 from utils import sn7_helpers
 
 ee.Initialize()
@@ -29,13 +30,38 @@ def new_buildings(aoi_id: str, start_year: int, start_month: int, end_year: int,
     return ee.FeatureCollection(new_features)
 
 
-def collect_sar_images(roi: ee.Geometry, orbit: int, polarization: str, start_date: str, end_date: str) -> ee.Image:
+def filterFullyOverlap(image_collection: ee.ImageCollection, geom: ee.Geometry.Polygon) -> ee.ImageCollection:
+    coordsList = ee.List(geom.coordinates().get(0))
+    for i in range(4):
+        coords = coordsList.get(i)
+        point = ee.Geometry.Point(coords, proj=geom.projection())
+        image_collection = image_collection.filterBounds(point)
+    return image_collection
+
+
+def collect_sar_images(roi: ee.Geometry, polarization: str, start_date: str, end_date: str,
+                       orbit: int = None) -> ee.Image:
 
     s1 = ee.ImageCollection('COPERNICUS/S1_GRD') \
-        .filterBounds(roi)\
         .filterDate(start_date, end_date)\
-        .filter(ee.Filter.eq('relativeOrbitNumber_stop', orbit)) \
-        .filter(ee.Filter.listContains('transmitterReceiverPolarisation', polarization))
+        .filter(ee.Filter.listContains('transmitterReceiverPolarisation', polarization))\
+        .filterBounds(roi)
+
+    s1 = filterFullyOverlap(s1, roi)
+
+    if orbit is not None:
+        s1 = s1.filter(ee.Filter.eq('relativeOrbitNumber_stop', orbit))
+    else:
+        # select orbit with best data availability
+        orbits = s1.toList(s1.size()).map(lambda img: ee.Image(img).get('relativeOrbitNumber_stop'))
+        orbits = orbits.distinct().getInfo()
+        scenes_per_orbit = []
+        for orbit_cand in orbits:
+            n_scenes = s1.filter(ee.Filter.eq('relativeOrbitNumber_stop', orbit_cand)).size().getInfo()
+            scenes_per_orbit.append(n_scenes)
+        i_max = np.argmax(scenes_per_orbit)
+        orbit = orbits[i_max]
+        s1 = s1.filter(ee.Filter.eq('relativeOrbitNumber_stop', orbit))
 
     s1 = s1.sort('SLC_Processing_start', True)
     img = s1.first().select([polarization])

@@ -20,7 +20,7 @@ def download_sn7_images(aoi_id: str):
         'roi': roi,
         'start_date': f'{start_year}-{start_month:02d}-01',
         'end_date': f'{end_year}-{end_month:02d}-01',
-        'orbit': orbit,
+        'orbit': None,
         'polarization': 'VV',
     }
 
@@ -32,7 +32,7 @@ def download_sn7_images(aoi_id: str):
     imageTask = ee.batch.Export.image.toDrive(
         image=img,
         description=aoi_id,
-        folder="bua_cd_sar",
+        folder="bua_cd_sar_images",
         scale=10,
         maxPixels=1e12,
         crs=crs,
@@ -74,7 +74,7 @@ def downnload_sn7_labels(aoi_id: str):
         image=bua_new,
         fileNamePrefix=img_name,
         description=dl_desc,
-        folder="bua_cd_sar",
+        folder="bua_cd_sar_labels",
         scale=10,
         maxPixels=1e12,
         crs=crs,
@@ -82,12 +82,12 @@ def downnload_sn7_labels(aoi_id: str):
     )
 
     # Start the task.
-    imageTask.start()
+    # imageTask.start()
 
 
 if __name__ == '__main__':
     for i, aoi_id in enumerate(sn7_helpers.get_aoi_ids()):
-        # download_sn7_images(aoi_id)
-        downnload_sn7_labels(aoi_id)
-        if i > 5:
-            break
+        if aoi_id == 'L15-1716E-1211N_6864_3345_13':
+            print(aoi_id)
+            # download_sn7_images(aoi_id)
+            downnload_sn7_labels(aoi_id)

@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from scipy import ndimage
 from osgeo import gdal
 import time
@@ -45,7 +46,7 @@ def BreakPoint(y, x):
     Mu2 = np.mean(np.log(y[Points1:]))
     std2 = np.std(np.log(y[Points1:]), ddof=1)
     KLD1 = ((Mu1 - Mu2) ** 2 + std1 ** 2 - std2 ** 2) / std2 ** 2 + (
-                (Mu1 - Mu2) ** 2 + std2 ** 2 - std1 ** 2) / std1 ** 2
+            (Mu1 - Mu2) ** 2 + std2 ** 2 - std1 ** 2) / std1 ** 2
 
     return [Ratio11, Ratio12, KLD1, Points1]
 
@@ -58,10 +59,7 @@ def BreakPoint(y, x):
 Read data file and prepare the input image
 ---------------------------------------------------------------------------------------------------------------------------------
 """
-
-
-
-Path = "C:/Users/shafner/bua_cd_sar/reproducability/Data"
+Path = "/content/drive/My Drive/KM/Data1"
 FileList = glob.glob(Path + "/*.tif")
 print(FileList)
 for Index4Image in range(len(FileList)):
@@ -70,6 +68,10 @@ for Index4Image in range(len(FileList)):
     Images = Data.ReadAsArray()
     ImagesT = np.reshape(Images, (Images.shape[0], Images.shape[1] * Images.shape[2])).transpose()
     # Dates   = np.array((Dates - Ref).days) / 365.25
+    fig, ax = plt.subplots()
+    img = ax.imshow(Images[1, :, :])  #
+    plt.title('Image' + File)
+    plt.show()
     """
     -----------------------------------------------------------------------------------------------------------------------------------------------------
     """
@@ -94,7 +96,7 @@ for Index4Image in range(len(FileList)):
     # Writing change variable to a file
     BNames = ["Ratio+ (CPT)", "Ratio- (CPT)", "KLD (CPT)", "Point (CPT)"]
     Drive = gdal.GetDriverByName("GTiff")
-    Filen = File.replace("Data", "Results").replace(".tif", " - Change Image.tif")
+    Filen = File.replace("Data", "Results").replace(".tif", " - Change Image")
     OutData = Drive.Create(Filen, Result.shape[2], Result.shape[1], Result.shape[0], gdal.GDT_Float32)
     OutData.SetProjection(Data.GetProjection())
     OutData.SetGeoTransform(Data.GetGeoTransform())
@@ -111,7 +113,7 @@ for Index4Image in range(len(FileList)):
     """
 
     # Open chaneg variable file
-    Data = gdal.Open(File.replace("Data", "Results").replace(".tif", " - Change Image.tif"), gdal.GA_ReadOnly)
+    Data = gdal.Open(File.replace("Data", "Results").replace(".tif", " - Change Image"), gdal.GA_ReadOnly)
     ChangeImage = Data.ReadAsArray()
 
     # Loop over chaneg vafriable to be classified
@@ -137,7 +139,7 @@ for Index4Image in range(len(FileList)):
         BandNames.append(Data.GetRasterBand(x + 1).GetDescription())
         # Writing change map to a file
     Drive = gdal.GetDriverByName("GTiff")
-    Filen = File.replace("Data", "Results").replace(".tif", " - Change Map (Kmean).tif")
+    Filen = File.replace("Data", "Results").replace(".tif", " - Change Map (Kmean)")
     OutData = Drive.Create(Filen, ChangeMap.shape[2], ChangeMap.shape[1], ChangeMap.shape[0], gdal.GDT_Byte)
     OutData.SetProjection(Data.GetProjection())
     OutData.SetGeoTransform(Data.GetGeoTransform())
@@ -166,7 +168,7 @@ for Index4Image in range(len(FileList)):
 
             # Writing change time to a file
     Drive = gdal.GetDriverByName("GTiff")
-    Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean).tif")
+    Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean)")
     OutData = Drive.Create(Filen, ChangeTime.shape[2], ChangeTime.shape[1], ChangeTime.shape[0], gdal.GDT_UInt16)
     OutData.SetProjection(Data.GetProjection())
     OutData.SetGeoTransform(Data.GetGeoTransform())
@@ -196,7 +198,7 @@ for Index4Image in range(len(FileList)):
     """
 
     # Open change time map
-    Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean).tif")
+    Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean)")
     Data = gdal.Open(Filen, gdal.GA_ReadOnly)
     ChangeTime = Data.ReadAsArray()
 
@@ -223,7 +225,7 @@ for Index4Image in range(len(FileList)):
 
     # Writing aggregated change time to a file
     Drive = gdal.GetDriverByName("GTiff")
-    Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean) - agg.tif")
+    Filen = File.replace("Data", "Results").replace(".tif", " - Change Time (Kmean) - agg")
     OutData = Drive.Create(Filen, CT.shape[2], CT.shape[1], CT.shape[0], gdal.GDT_UInt16)
     OutData.SetProjection(Data.GetProjection())
     OutData.SetGeoTransform(Data.GetGeoTransform())

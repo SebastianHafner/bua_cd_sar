@@ -156,11 +156,11 @@ if __name__ == '__main__':
 
     images, transform, crs, date_strings = geofiles.read_tif(timeseries_file)
 
-    # change_variables = extract_change_variables(images, date_strings, parallelize=True)
+    change_variables = extract_change_variables(images, date_strings, parallelize=True)
     # visualization.visualize_change_variables(change_variables)
 
     cv_file = Path(dirs.OUTPUT) / 'results' / f'{aoi_id}_change_variables.tif'
-    # geofiles.write_tif(cv_file, change_variables, transform, crs)
+    geofiles.write_tif(cv_file, change_variables, transform, crs)
 
     change_variables, *_ = geofiles.read_tif(cv_file)
     change_maps = change_mapping(change_variables)
