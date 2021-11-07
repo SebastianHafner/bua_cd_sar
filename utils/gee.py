@@ -23,7 +23,9 @@ def new_buildings(aoi_id: str, start_year: int, start_month: int, end_year: int,
     features = building_footprints['features']
     new_features = []
     for feature in features:
-        coords = feature['geometry']['coordinates']
+        coords = feature['geometry']['coordinates'][0]
+        if len(coords[0]) == 3:
+            coords = [[c1, c2] for c1, c2, _ in coords]
         geom = ee.Geometry.Polygon(coords, proj='EPSG:3857').transform('EPSG:4326')
         new_feature = ee.Feature(geom)
         new_features.append(new_feature)

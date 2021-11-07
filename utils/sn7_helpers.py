@@ -1,6 +1,12 @@
 from pathlib import Path
 from utils import paths, geofiles
 
+BAD_AOI_IDS = [
+    'L15-0487E-1246N_1950_3207_13',
+    'L15-1049E-1370N_4196_2710_13',
+    'L15-1709E-1112N_6838_3742_13',
+]
+
 
 def get_sn7_timestamps() -> dict:
     dirs = paths.load_paths()
@@ -31,6 +37,7 @@ def get_end_date(aoi_id: str) -> tuple:
 def get_aoi_ids() -> list:
     sn7_timestamps = get_sn7_timestamps()
     aoi_ids = sorted(sn7_timestamps.keys())
+    aoi_ids = [aoi_id for aoi_id in aoi_ids if aoi_id not in BAD_AOI_IDS]
     return aoi_ids
 
 
@@ -90,6 +97,13 @@ def load_sn7_planet_mosaic(aoi_id: str, year: int, month: int):
     file = images_folder / f'global_monthly_{year}_{month:02d}_mosaic_{aoi_id}.tif'
     data, *_ = geofiles.read_tif(file)
     return data
+
+
+def load_change_label(aoi_id: str):
+    dirs = paths.load_paths()
+    file = Path(dirs.DATA) / 'labels' / f'label_{aoi_id}.tif'
+    label, *_ = geofiles.read_tif(file)
+    return label[:, :, 0]
 
 
 if __name__ == '__main__':

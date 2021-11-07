@@ -82,12 +82,11 @@ def downnload_sn7_labels(aoi_id: str):
     )
 
     # Start the task.
-    # imageTask.start()
+    imageTask.start()
 
 
 if __name__ == '__main__':
     for i, aoi_id in enumerate(sn7_helpers.get_aoi_ids()):
-        if aoi_id == 'L15-1716E-1211N_6864_3345_13':
-            print(aoi_id)
-            # download_sn7_images(aoi_id)
-            downnload_sn7_labels(aoi_id)
+        print(i, aoi_id)
+        # download_sn7_images(aoi_id)
+        downnload_sn7_labels(aoi_id)
