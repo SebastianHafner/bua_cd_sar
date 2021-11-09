@@ -3,11 +3,11 @@ from fvcore.common.config import CfgNode as _CfgNode
 
 
 # set the paths
-HOME = 'C:/Users/shafner/repos/bua_cd_sar'
-DATA = 'C:/Users/shafner/bua_cd_sar/data'
-OUTPUT = 'C:/Users/shafner/bua_cd_sar/output'
+HOME = 'C:/Users/hafne/repos/bua_cd_sar'
+DATA = 'C:/Users/hafne/bua_cd_sar/data'
+OUTPUT = 'C:/Users/hafne/bua_cd_sar/output'
 SN7_RAW = 'C:/Users/shafner/datasets/spacenet7'
-SN7_TIMESTAMPS_FILE = 'C:/Users/shafner/bua_cd_sar/sn7_metadata/sn7_timestamps.json'
+SN7_TIMESTAMPS_FILE = 'C:/Users/hafne/bua_cd_sar/sn7_metadata/sn7_timestamps.json'
 SN7_ORBITS_FILE = 'C:/Users/shafner/bua_cd_sar/sn7_metadata/sn7_orbits.json'
 
 
