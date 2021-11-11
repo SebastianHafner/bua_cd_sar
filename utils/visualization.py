@@ -39,3 +39,8 @@ def visualize_change_map(ax, aoi_id: str, index: int):
     change_maps, *_ = geofiles.read_tif(file)
     ax.imshow(change_maps[:, :, index], cmap='gray')
     ax.set_axis_off()
+
+
+def visualize_change(ax, change_map: np.ndarray):
+    ax.imshow(change_map, cmap='gray')
+    ax.set_axis_off()

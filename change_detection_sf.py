@@ -1,8 +1,10 @@
 import numpy as np
-from utils import paths, geofiles, sn7_helpers
+from utils import paths, geofiles, sn7_helpers, visualization
 import scipy
 from pathlib import Path
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+FONTSIZE = 16
 
 
 def compute_kl_div(images: np.ndarray, break_points: np.ndarray) -> np.ndarray:
@@ -38,7 +40,7 @@ def change_detection(images: np.ndarray, min_diff: int = 5) -> np.ndarray:
         mean_presegment = np.mean(presegment, axis=-1)
         pred_presegment = np.repeat(mean_presegment[:, :, np.newaxis], i, axis=-1)
 
-        postsegment = probs_cube[:, :, i:]
+        postsegment = images[:, :, i:]
         mean_postsegment = np.mean(postsegment, axis=-1)
         pred_postsegment = np.repeat(mean_postsegment[:, :, np.newaxis], length_ts - i, axis=-1)
 
@@ -65,5 +67,24 @@ if __name__ == '__main__':
     for aoi_id in sn7_helpers.get_aoi_ids():
         print(aoi_id)
         sar_images_file = Path(dirs.DATA) / 'images' / f'{aoi_id}.tif'
-        sar_images, transform, crs, date_strings = geofiles.read_tif(sar_data_file)
+        sar_images, transform, crs, date_strings = geofiles.read_tif(sar_images_file)
         change = change_detection(sar_images)
+
+        fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+        start_year, start_month = sn7_helpers.get_start_date(aoi_id)
+        # visualization.visualize_sn7_planet_mosaic(axs[0], aoi_id, start_year, start_month)
+        # axs[0].set_title(f'Planet {start_year}-{start_month:02d}', fontsize=FONTSIZE)
+        end_year, end_month = sn7_helpers.get_end_date(aoi_id)
+        # visualization.visualize_sn7_planet_mosaic(axs[1], aoi_id, end_year, end_month)
+        # axs[1].set_title(f'Planet mosaic {end_year}-{end_month:02d}', fontsize=FONTSIZE)
+
+        visualization.visualize_change_label(axs[0], aoi_id)
+        axs[0].set_title('Ground Truth', fontsize=FONTSIZE)
+
+        visualization.visualize_change(axs[1], change)
+        axs[1].set_title('Pred', fontsize=FONTSIZE)
+
+        plt.show()
+        plt.close(fig)
+
+
