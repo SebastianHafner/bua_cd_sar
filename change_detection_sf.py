@@ -23,7 +23,7 @@ def compute_mse(y: np.ndarray, y_hat: np.ndarray) -> float:
     return np.sum(np.square(y_hat - y), axis=-1) / y.shape[-1]
 
 
-def change_detection(images: np.ndarray, min_diff: int = 5):
+def change_detection(images: np.ndarray, min_diff: int = 5) -> np.ndarray:
     length_ts = images.shape[-1]
 
     # images = scipy.signal.convolve2d(images, in2, mode='same', boundary='symm')
@@ -57,6 +57,7 @@ def change_detection(images: np.ndarray, min_diff: int = 5):
     m, n = mean_diffs.shape[:2]
     mean_diff = mean_diffs[np.arange(m)[:, None], np.arange(n), best_fit]
     change = mean_diff > min_diff
+    return change
 
 
 if __name__ == '__main__':
